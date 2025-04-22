@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>User Graph - Litegraph Demo</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+  <!-- Litegraph.js desde CDN -->
+  <script src="https://cdn.jsdelivr.net/gh/jagenjo/litegraph.js/build/litegraph.min.js"></script>
+</head>
+<body>
+  <canvas id="graphcanvas" width="100%" height="100%"></canvas>
+
+  <script>
+    // Crear grafo
+    const graph = new LGraph();
+
+    // Crear canvas
+    const canvas = new LGraphCanvas("#graphcanvas", graph);
+
+    // Nodo Usuario
+    function createUserNode(username, x, y) {
+      const node = LiteGraph.createNode("basic/user");
+      node.pos = [x, y];
+      node.title = username;
+      node.addOutput("Interactuó con", "user");
+      node.addInput("Colaboración", "user");
+      graph.add(node);
+      return node;
+    }
+
+    // Registro de nodo personalizado
+    function registerUserNode() {
+      function UserNode() {
+        this.addOutput("Interactuó con", "user");
+        this.addInput("Colaboración", "user");
+      }
+
+      UserNode.title = "Usuario";
+      UserNode.desc = "Nodo de usuario conectado";
+
+      UserNode.prototype.onExecute = function() {
+        // Lógica si se requiere
+      };
+
+      LiteGraph.registerNodeType("basic/user", UserNode);
+    }
+
+    registerUserNode();
+
+    // Crear algunos usuarios
+    const user1 = createUserNode("Ana", 100, 100);
+    const user2 = createUserNode("Carlos", 400, 150);
+    const user3 = createUserNode("Luis", 250, 300);
+
+    // Conectar algunos nodos
+    user1.connect(0, user2, 0);
+    user2.connect(0, user3, 0);
+
+    // Ejecutar grafo
+    graph.start();
+  </script>
+</body>
+</html>
