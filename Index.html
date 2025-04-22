@@ -1,0 +1,112 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Usuarios con LiteGraph y Google Login</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; font-family: sans-serif; }
+    #mycanvas { width: 100vw; height: 100vh; display: block; background: #f0f0f0; }
+    #login-info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 10;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/litegraph.js/build/litegraph.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litegraph.js/css/litegraph.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <div id="login-info">
+    <div id="g_id_onload"
+      data-client_id="980822676255-vntch0t28qbesul2bp5oc1galtoi8a97.apps.googleusercontent.com"
+      data-callback="handleCredentialResponse"
+      data-context="use"
+      data-ux_mode="popup"
+      data-auto_select="true"
+      data-itp_support="true">
+    </div>
+    <div class="g_id_signin"
+      data-type="standard"
+      data-shape="rectangular"
+      data-theme="outline"
+      data-text="signin_with"
+      data-size="large"
+      data-logo_alignment="left">
+    </div>
+    <h3 id="user-info">No autenticado</h3>
+  </div><canvas id="mycanvas" width="1200" height="700"></canvas>
+
+<script>
+let graph = new LGraph();
+let canvas = new LGraphCanvas("#mycanvas", graph);
+graph.start();
+
+const socket = io("http://localhost:3000"); // Cambia al dominio de tu backend en producción
+
+function NodoUsuario() {
+  this.addOutput("link", "string");
+  this.addProperty("email", "");
+  this.addProperty("texto", "");
+  this.addProperty("url", "");
+}
+NodoUsuario.title = "Usuario";
+NodoUsuario.prototype.onExecute = function () {
+  this.setOutputData(0, `${this.properties.texto}: ${this.properties.url}`);
+};
+LiteGraph.registerNodeType("custom/usuario", NodoUsuario);
+
+function agregarNodoUsuario(nombre, email, texto = "", url = "") {
+  const node = LiteGraph.createNode("custom/usuario");
+  node.title = nombre;
+  node.pos = [Math.random() * 800 + 100, Math.random() * 400 + 100];
+  node.properties.email = email;
+  node.properties.texto = texto;
+  node.properties.url = url;
+  graph.add(node);
+}
+
+function handleCredentialResponse(response) {
+  const payload = decodeJwtResponse(response.credential);
+  localStorage.setItem("usuario", JSON.stringify(payload));
+  document.getElementById("user-info").textContent = `Usuario: ${payload.email}`;
+  ocultarLogin();
+
+  // Pedimos texto y url antes de emitir al servidor
+  const texto = prompt("¿Qué haces ahora? (Ej: Clases en Zoom)", "Disponible");
+  const url = prompt("¿Dónde pueden encontrarte? (Ej: https://t.me/miusuario)", "https://");
+  agregarNodoUsuario(payload.name, payload.email, texto, url);
+
+  // Emitimos al servidor
+  socket.emit("nuevo_usuario", {
+    nombre: payload.name,
+    email: payload.email,
+    texto,
+    url
+  });
+}
+
+function decodeJwtResponse(token) {
+  const base64Url = token.split('.')[1];
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  const jsonPayload = decodeURIComponent(atob(base64).split('').map(c =>
+    '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+  ).join(''));
+  return JSON.parse(jsonPayload);
+}
+
+function ocultarLogin() {
+  document.querySelector(".g_id_signin").style.display = "none";
+  document.getElementById("g_id_onload").style.display = "none";
+}
+
+// Cuando otro usuario se conecta
+socket.on("usuario_conectado", (data) => {
+  agregarNodoUsuario(data.nombre, data.email, data.texto, data.url);
+});
+</script></body>
+</html>
