@@ -225,14 +225,20 @@
     async function actualizarNodo() {
       const url = document.getElementById("contactoURL").value.trim();
       const desc = document.getElementById("descripcion").value.trim();
-
+    
       try {
-        await db.ref(`nodos/${usuario.email}`).set({
+        // Codificar el email para clave válida
+        const emailCodificado = usuario.email
+          .replace(/\./g, '_')    // Reemplaza puntos por _
+          .replace(/@/g, '-at-'); // Reemplaza @ por -at-
+    
+        await db.ref(`nodos/${emailCodificado}`).set({
           nombre: usuario.name,
           descripcion: desc,
           url: url,
           timestamp: firebase.database.ServerValue.TIMESTAMP
         });
+        
       } catch (error) {
         console.error("Error actualizando nodo:", error);
       }
