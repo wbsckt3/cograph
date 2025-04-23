@@ -78,7 +78,7 @@
   <div class="loading" style="display: none;">Cargando red...</div>
 
   <script>
-    // Configura Firebase (Reemplaza con tus credenciales)
+    // Configuración Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyCQ3pWWwjmcTRapgf3ECRen_DshTh9dC30",
       authDomain: "cograph-9fa9c.firebaseapp.com",
@@ -86,14 +86,15 @@
       storageBucket: "cograph-9fa9c.firebasestorage.app",
       messagingSenderId: "527531395150",
       appId: "1:527531395150:web:96b92d254fb67fcb83db1f",
-      measurementId: "G-1GTBRLHJFC"
+      measurementId: "G-1GTBRLHJFC",
+      databaseURL: "https://cograph-9fa9c-default-rtdb.firebaseio.com/" // Asegúrate de agregar esta línea
     };
+
     // Inicializa Firebase
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     const auth = firebase.auth();
 
-    let usuario = null;
     let cy;
 
     function inicializarCytoscape() {
@@ -129,7 +130,7 @@
       // Layout inicial
       cy.layout({ name: 'cose', animate: true }).run();
 
-      // Evento de tap
+      // Evento de tap actualizado
       cy.on('tap', 'node', function(evt) {
         const targetNode = evt.target;
         if (targetNode) {
@@ -144,12 +145,6 @@
         const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
         await auth.signInWithCredential(credential);
         
-        usuario = {
-          name: auth.currentUser.displayName,
-          email: auth.currentUser.email,
-          picture: auth.currentUser.photoURL
-        };
-
         document.getElementById("login").style.display = "none";
         document.getElementById("formulario").style.display = "block";
         
@@ -223,46 +218,40 @@
     }
 
     async function actualizarNodo() {
-      // Obtener valores
-      const contactoURL = document.getElementById("contactoURL");
-      const descripcion = document.getElementById("descripcion");
-      
-      const url = contactoURL.value.trim();
-      const desc = descripcion.value.trim(); // ✔️ Definición correcta
-    
+      const user = firebase.auth().currentUser;
+      const url = document.getElementById("contactoURL").value.trim();
+      const desc = document.getElementById("descripcion").value.trim();
+
       try {
-        // Usar UID (mejor práctica)
-        const user = firebase.auth().currentUser;
-        
         await db.ref(`nodos/${user.uid}`).set({
           nombre: user.displayName,
-          email: user.email,
-          descripcion: desc, // ← Variable definida
+          descripcion: desc,
           url: url,
           timestamp: firebase.database.ServerValue.TIMESTAMP
         });
-    
         console.log("Nodo actualizado correctamente!");
-        
       } catch (error) {
         console.error("Error actualizando nodo:", error);
       }
     }
 
-    function crearConexion(targetEmail) {
-      if (targetEmail !== usuario.email) {
-        db.ref(`conexiones/${usuario.email}_${targetEmail}`).set({
-          source: usuario.email,
-          target: targetEmail,
+    function crearConexion(targetUID) {
+      const user = firebase.auth().currentUser;
+      if (user && targetUID !== user.uid) {
+        const conexionId = `${user.uid}_${targetUID}`;
+        db.ref(`conexiones/${conexionId}`).set({
+          source: user.uid,
+          target: targetUID,
           timestamp: Date.now()
         });
       }
     }
 
-    // Manejo de desconexión
+    // Manejo de desconexión actualizado
     window.addEventListener('beforeunload', () => {
-      if (usuario) {
-        db.ref(`nodos/${usuario.email}`).remove();
+      const user = firebase.auth().currentUser;
+      if (user) {
+        db.ref(`nodos/${user.uid}`).remove();
       }
     });
   </script>
