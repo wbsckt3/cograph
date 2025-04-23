@@ -95,7 +95,6 @@
     const auth = firebase.auth();
 
     let usuario = null;
-    let nodoUsuario = null;
     let cy;
 
     function inicializarCytoscape() {
@@ -126,6 +125,17 @@
             'curve-style': 'bezier'
           }
         }]
+      });
+
+      // Layout inicial
+      cy.layout({ name: 'cose', animate: true }).run();
+
+      // Evento de tap
+      cy.on('tap', 'node', function(evt) {
+        const targetNode = evt.target;
+        if (targetNode) {
+          crearConexion(targetNode.id());
+        }
       });
     }
 
@@ -238,18 +248,6 @@
         });
       }
     }
-
-    // Eventos de Cytoscape
-    cy.on('tap', 'node', function(evt) {
-      const targetNode = evt.target;
-      if (targetNode) {
-        crearConexion(targetNode.id());
-      }
-    });
-
-    // Inicialización inicial
-    inicializarCytoscape();
-    cy.layout({ name: 'cose', animate: true }).run();
 
     // Manejo de desconexión
     window.addEventListener('beforeunload', () => {
