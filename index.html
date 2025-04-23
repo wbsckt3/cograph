@@ -223,16 +223,27 @@
     }
 
     async function actualizarNodo() {
-      const user = firebase.auth().currentUser; // Obtener usuario actual
+      // Obtener valores
+      const contactoURL = document.getElementById("contactoURL");
+      const descripcion = document.getElementById("descripcion");
       
+      const url = contactoURL.value.trim();
+      const desc = descripcion.value.trim(); // ✔️ Definición correcta
+    
       try {
+        // Usar UID (mejor práctica)
+        const user = firebase.auth().currentUser;
+        
         await db.ref(`nodos/${user.uid}`).set({
-          nombre: usuario.name,
-          email: usuario.email, // Guardar email como dato, no como clave
-          descripcion: desc,
+          nombre: user.displayName,
+          email: user.email,
+          descripcion: desc, // ← Variable definida
           url: url,
           timestamp: firebase.database.ServerValue.TIMESTAMP
         });
+    
+        console.log("Nodo actualizado correctamente!");
+        
       } catch (error) {
         console.error("Error actualizando nodo:", error);
       }
