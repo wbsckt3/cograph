@@ -223,22 +223,16 @@
     }
 
     async function actualizarNodo() {
-      const url = document.getElementById("contactoURL").value.trim();
-      const desc = document.getElementById("descripcion").value.trim();
-    
+      const user = firebase.auth().currentUser; // Obtener usuario actual
+      
       try {
-        // Codificar el email para clave válida
-        const emailCodificado = usuario.email
-          .replace(/\./g, '_')    // Reemplaza puntos por _
-          .replace(/@/g, '-at-'); // Reemplaza @ por -at-
-    
-        await db.ref(`nodos/${emailCodificado}`).set({
+        await db.ref(`nodos/${user.uid}`).set({
           nombre: usuario.name,
+          email: usuario.email, // Guardar email como dato, no como clave
           descripcion: desc,
           url: url,
           timestamp: firebase.database.ServerValue.TIMESTAMP
         });
-        
       } catch (error) {
         console.error("Error actualizando nodo:", error);
       }
