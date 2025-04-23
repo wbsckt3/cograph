@@ -80,6 +80,14 @@
   <div class="loading" style="display: none;">Cargando red...</div>
 
   <script>
+
+    // Agrega esto al inicio de tu script
+    const originalError = console.error;
+    console.error = (...args) => {
+      if (args[0]?.includes('play.google.com/log')) return; // Filtra el error específico
+      originalError.apply(console, args);
+    };
+    
     // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyAFSFnh2ltKsODIk8mFilRUM4MAGUzFc-c",
