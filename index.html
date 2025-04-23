@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Red de Conexiones en Tiempo Real</title>
+  <style>
+    body, html {
+      margin: 0; padding: 0; height: 100%; font-family: sans-serif;
+    }
+    #cy {
+      width: 100vw; height: 100vh;
+    }
+    #login, #formulario {
+      position: absolute; z-index: 10;
+      top: 10px; left: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 10px; border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      max-width: 300px;
+    }
+    input, textarea, button {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1em;
+      width: 95%;
+      margin-bottom: 5px;
+    }
+    textarea {
+      resize: none;
+      height: 60px;
+    }
+    .loading {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1.2em;
+    }
+  </style>
+  <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-auth-compat.js"></script>
+</head>
+<body>
+  <!-- Login -->
+  <div id="login">
+    <div id="g_id_onload"
+      data-client_id="965589316488-ek19vk2uqjpaf2gilkpg5k8e33jbsd5k.apps.googleusercontent.com"
+      data-callback="handleCredentialResponse"
+      data-context="use"
+      data-ux_mode="popup"
+      data-auto_select="true"
+      data-itp_support="true">
+    </div>
+    <div class="g_id_signin"
+      data-type="standard"
+      data-shape="rectangular"
+      data-theme="outline"
+      data-text="signin_with"
+      data-size="large"
+      data-logo_alignment="left">
+    </div>
+  </div>
+
+  <!-- Formulario -->
+  <div id="formulario" style="display: none;">
+    <label>¿Dónde te pueden contactar? (URL)</label>
+    <input type="text" id="contactoURL" placeholder="https://wa.me/..." />
+    <label>¿Qué estás ofreciendo? (máx 3 renglones)</label>
+    <textarea id="descripcion" placeholder="Clases, asesorías, networking, etc."></textarea>
+    <button onclick="actualizarNodo()">Actualizar estado</button>
+  </div>
+
+  <div id="cy"></div>
+  <div class="loading" style="display: none;">Cargando red...</div>
+
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyAFSFnh2ltKsODIk8mFilRUM4MAGUzFc-c",
+      authDomain: "cograph2.firebaseapp.com",
+      projectId: "cograph2",
+      storageBucket: "cograph2.firebasestorage.app",
+      messagingSenderId: "885028561055",
+      appId: "1:885028561055:web:bae9f0113613e4128282aa",
+      measurementId: "G-38CEED032Q"
+    };
+
+    // Inicializar Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
+    let cy;
+
+    function inicializarCytoscape() {
+      cy = cytoscape({
+        container: document.getElementById('cy'),
+        style: [{
+          selector: 'node',
+          style: {
+            'background-color': '#0074D9',
+            'label': 'data(label)',
+            'color': '#fff',
+            'text-valign': 'center',
+            'text-wrap': 'wrap',
+            'text-max-width': '150px',
+            'font-size': 12,
+            'shape': 'roundrectangle',
+            'padding': 10,
+            'width': 'label',
+            'height': 'label',
+            'border-width': 2,
+            'border-color': '#005fa3'
+          }
+        }, {
+          selector: 'edge',
+          style: {
+            'width': 2,
+            'line-color': '#999',
+            'curve-style': 'bezier'
+          }
+        }]
+      });
+
+      cy.layout({ name: 'cose', animate: true }).run();
+
+      cy.on('tap', 'node', function(evt) {
+        const targetNode = evt.target;
+        if (targetNode) crearConexion(targetNode.id());
+      });
+    }
+
+    async function handleCredentialResponse(response) {
+      try {
+        document.querySelector('.loading').style.display = 'block';
+        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+        await auth.signInWithCredential(credential);
+
+        const user = auth.currentUser;
+
+        // Crear nodo básico si no existe
+        const nodoRef = db.ref(`nodos/${user.uid}`);
+        const snapshot = await nodoRef.once('value');
+        if (!snapshot.exists()) {
+          await nodoRef.set({
+            nombre: user.displayName,
+            descripcion: '',
+            url: '',
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+          });
+        }
+
+        document.getElementById("login").style.display = "none";
+        document.getElementById("formulario").style.display = "block";
+
+        inicializarCytoscape();
+        inicializarConexionTiempoReal();
+      } catch (error) {
+        console.error("Error de autenticación:", error);
+      } finally {
+        document.querySelector('.loading').style.display = 'none';
+      }
+    }
+
+    function inicializarConexionTiempoReal() {
+      db.ref('nodos').on('value', (snapshot) => {
+        const nodos = snapshot.val() || {};
+        actualizarNodos(nodos);
+      });
+
+      db.ref('conexiones').on('value', (snapshot) => {
+        const conexiones = snapshot.val() || {};
+        actualizarConexiones(conexiones);
+      });
+    }
+
+    function actualizarNodos(nodos) {
+      Object.entries(nodos).forEach(([id, datos]) => {
+        if (!cy.getElementById(id).length) {
+          cy.add({
+            group: 'nodes',
+            data: {
+              id: id,
+              label: `${datos.nombre}\n${datos.descripcion}\n${datos.url}`,
+              href: datos.url
+            },
+            position: {
+              x: Math.random() * 500,
+              y: Math.random() * 500
+            }
+          });
+        }
+      });
+
+      cy.elements().nodes().forEach(node => {
+        if (!nodos[node.id()]) node.remove();
+      });
+
+      cy.layout({ name: 'cose', animate: true }).run();
+    }
+
+    function actualizarConexiones(conexiones) {
+      cy.elements().edges().remove();
+      Object.values(conexiones).forEach(conexion => {
+        cy.add({
+          group: 'edges',
+          data: {
+            id: `${conexion.source}-${conexion.target}`,
+            source: conexion.source,
+            target: conexion.target
+          }
+        });
+      });
+    }
+
+    async function actualizarNodo() {
+      const user = auth.currentUser;
+      const url = document.getElementById("contactoURL").value.trim();
+      const desc = document.getElementById("descripcion").value.trim();
+
+      try {
+        await db.ref(`nodos/${user.uid}`).update({
+          descripcion: desc,
+          url: url,
+          timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+        console.log("Nodo actualizado correctamente!");
+      } catch (error) {
+        console.error("Error actualizando nodo:", error);
+      }
+    }
+
+    function crearConexion(targetUID) {
+      const user = auth.currentUser;
+      if (user && targetUID !== user.uid) {
+        const conexionId = `${user.uid}_${targetUID}`;
+        db.ref(`conexiones/${conexionId}`).set({
+          source: user.uid,
+          target: targetUID,
+          timestamp: Date.now()
+        });
+      }
+    }
+
+    // Elimina nodo al cerrar/reload
+    window.addEventListener('beforeunload', () => {
+      const user = auth.currentUser;
+      if (user) {
+        db.ref(`nodos/${user.uid}`).remove();
+      }
+    });
+  </script>
+</body>
+</html>
