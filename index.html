@@ -5,12 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Red de Conexiones</title>
   <style>
-    /* Estilos se mantienen igual */
-    body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; }
-    #cy { width: 100vw; height: 100vh; }
-    #login, #formulario { /* ... */ }
-    input, textarea, button { /* ... */ }
-    .loading { /* ... */ }
+    /* Tus estilos CSS se mantienen igual */
+    body, html {
+      margin: 0; padding: 0; height: 100%; font-family: sans-serif;
+    }
+    #cy {
+      width: 100vw; height: 100vh;
+    }
+    #login, #formulario {
+      position: absolute; z-index: 10;
+      top: 10px; left: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 10px; border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      max-width: 300px;
+    }
+    input, textarea, button {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1em;
+      width: 95%;
+      margin-bottom: 5px;
+    }
+    textarea {
+      resize: none;
+      height: 60px;
+    }
+    .loading {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1.2em;
+    }
   </style>
   <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
