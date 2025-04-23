@@ -1,6 +1,7 @@
 - autenticación con Google Sign-In, 
 - conexión tiempo real con Firebase, 
 - visualización de nodos con Cytoscape.js.
+- real time firestore database de firebase
 
 index.html_OK_antes_de_firebase  ---> crea nodos Ok antes de cambiar el método de autenticación a firebase
 
