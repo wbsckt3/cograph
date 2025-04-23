@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Conexión de Usuarios</title>
+  <title>Red de Conexiones en Tiempo Real</title>
   <style>
     body, html {
       margin: 0; padding: 0; height: 100%; font-family: sans-serif;
@@ -31,9 +31,20 @@
       resize: none;
       height: 60px;
     }
+    .loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1.2em;
+    }
   </style>
   <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-auth-compat.js"></script>
 </head>
 <body>
   <div id="login">
@@ -64,15 +75,33 @@
   </div>
 
   <div id="cy"></div>
+  <div class="loading" style="display: none;">Cargando red...</div>
 
   <script>
+    // Configura Firebase (Reemplaza con tus credenciales)
+    const firebaseConfig = {
+      apiKey: "TU_API_KEY",
+      authDomain: "TU_PROYECTO.firebaseapp.com",
+      databaseURL: "https://TU_PROYECTO.firebaseio.com",
+      projectId: "TU_PROYECTO",
+      storageBucket: "TU_PROYECTO.appspot.com",
+      messagingSenderId: "TU_SENDER_ID",
+      appId: "TU_APP_ID"
+    };
+
+    // Inicializa Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
+
     let usuario = null;
     let nodoUsuario = null;
+    let cy;
 
-    const cy = cytoscape({
-      container: document.getElementById('cy'),
-      style: [
-        {
+    function inicializarCytoscape() {
+      cy = cytoscape({
+        container: document.getElementById('cy'),
+        style: [{
           selector: 'node',
           style: {
             'background-color': '#0074D9',
@@ -89,67 +118,144 @@
             'border-width': 2,
             'border-color': '#005fa3'
           }
-        }
-      ],
-      layout: {
-        name: 'grid',
-        rows: 1
-      }
-    });
-
-    function handleCredentialResponse(response) {
-      const payload = decodeJwtResponse(response.credential);
-      usuario = {
-        name: payload.name,
-        email: payload.email,
-        picture: payload.picture
-      };
-      document.getElementById("login").style.display = "none";
-      document.getElementById("formulario").style.display = "block";
-      crearNodoInicial();
-    }
-
-    function decodeJwtResponse(token) {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(atob(base64).split('').map(c =>
-        '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-      ).join(''));
-      return JSON.parse(jsonPayload);
-    }
-
-    function crearNodoInicial() {
-      const contenido = `${usuario.name}\n(Sin información aún)`;
-      nodoUsuario = cy.add({
-        group: 'nodes',
-        data: {
-          id: usuario.email,
-          label: contenido,
-          href: ""
-        },
-        position: {
-          x: Math.random() * 600 + 100,
-          y: Math.random() * 400 + 100
-        }
+        }, {
+          selector: 'edge',
+          style: {
+            'width': 2,
+            'line-color': '#999',
+            'curve-style': 'bezier'
+          }
+        }]
       });
     }
 
-    function actualizarNodo() {
+    async function handleCredentialResponse(response) {
+      try {
+        document.querySelector('.loading').style.display = 'block';
+        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+        await auth.signInWithCredential(credential);
+        
+        usuario = {
+          name: auth.currentUser.displayName,
+          email: auth.currentUser.email,
+          picture: auth.currentUser.photoURL
+        };
+
+        document.getElementById("login").style.display = "none";
+        document.getElementById("formulario").style.display = "block";
+        
+        inicializarCytoscape();
+        inicializarConexionTiempoReal();
+        
+      } catch (error) {
+        console.error("Error de autenticación:", error);
+      } finally {
+        document.querySelector('.loading').style.display = 'none';
+      }
+    }
+
+    function inicializarConexionTiempoReal() {
+      // Sincronizar nodos
+      db.ref('nodos').on('value', (snapshot) => {
+        const nodos = snapshot.val() || {};
+        actualizarNodos(nodos);
+      });
+
+      // Sincronizar conexiones
+      db.ref('conexiones').on('value', (snapshot) => {
+        const conexiones = snapshot.val() || {};
+        actualizarConexiones(conexiones);
+      });
+    }
+
+    function actualizarNodos(nodos) {
+      // Actualizar o añadir nodos
+      Object.entries(nodos).forEach(([id, datos]) => {
+        if (!cy.getElementById(id).length) {
+          cy.add({
+            group: 'nodes',
+            data: {
+              id: id,
+              label: `${datos.nombre}\n${datos.descripcion}\n${datos.url}`,
+              href: datos.url
+            },
+            position: {
+              x: Math.random() * 500,
+              y: Math.random() * 500
+            }
+          });
+        }
+      });
+
+      // Eliminar nodos removidos
+      cy.elements().nodes().forEach(node => {
+        if (!nodos[node.id()]) {
+          node.remove();
+        }
+      });
+
+      cy.layout({ name: 'cose', animate: true }).run();
+    }
+
+    function actualizarConexiones(conexiones) {
+      // Actualizar conexiones
+      cy.elements().edges().remove();
+      
+      Object.values(conexiones).forEach(conexion => {
+        cy.add({
+          group: 'edges',
+          data: {
+            id: `${conexion.source}-${conexion.target}`,
+            source: conexion.source,
+            target: conexion.target
+          }
+        });
+      });
+    }
+
+    async function actualizarNodo() {
       const url = document.getElementById("contactoURL").value.trim();
       const desc = document.getElementById("descripcion").value.trim();
 
-      if (!nodoUsuario) return;
-
-      const nuevoContenido = `${usuario.name}\n${desc}\n(${url})`;
-
-      nodoUsuario.data('label', nuevoContenido);
-      nodoUsuario.data('href', url);
+      try {
+        await db.ref(`nodos/${usuario.email}`).set({
+          nombre: usuario.name,
+          descripcion: desc,
+          url: url,
+          timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+      } catch (error) {
+        console.error("Error actualizando nodo:", error);
+      }
     }
 
-    // Permite hacer clic en el nodo para abrir el enlace
-    cy.on('tap', 'node', function(evt){
-      const url = evt.target.data('href');
-      if(url) window.open(url, '_blank');
+    function crearConexion(targetEmail) {
+      if (targetEmail !== usuario.email) {
+        db.ref(`conexiones/${usuario.email}_${targetEmail}`).set({
+          source: usuario.email,
+          target: targetEmail,
+          timestamp: Date.now()
+        });
+      }
+    }
+
+    // Eventos de Cytoscape
+    cy.on('tap', 'node', function(evt) {
+      const targetNode = evt.target;
+      if (targetNode) {
+        crearConexion(targetNode.id());
+      }
+    });
+
+    // Inicialización inicial
+    inicializarCytoscape();
+    cy.layout({ name: 'cose', animate: true }).run();
+
+    // Manejo de desconexión
+    window.addEventListener('beforeunload', () => {
+      if (usuario) {
+        db.ref(`nodos/${usuario.email}`).remove();
+      }
     });
   </script>
 </body>
