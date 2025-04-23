@@ -3,156 +3,164 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Conexión de Usuarios</title>
+  <title>Cograph</title>
   <style>
     body, html {
-      margin: 0; padding: 0; height: 100%; font-family: sans-serif;
+      margin: 0; padding: 0;
+      font-family: sans-serif;
+      height: 100%;
+      overflow: hidden;
     }
+
     #cy {
-      width: 100vw; height: 100vh;
+      width: 100vw;
+      height: 100vh;
     }
-    #login, #formulario {
-      position: absolute; z-index: 10;
-      top: 10px; left: 10px;
-      background: rgba(255, 255, 255, 0.95);
-      padding: 10px; border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.2);
-      max-width: 300px;
+
+    #login-info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px;
+      border-radius: 8px;
     }
-    input, textarea, button {
+
+    input, button {
+      display: block;
+      margin: 5px 0;
       padding: 8px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 1em;
-      width: 95%;
-      margin-bottom: 5px;
+      width: 100%;
+      font-size: 14px;
     }
-    textarea {
-      resize: none;
-      height: 60px;
+
+    a {
+      color: #007bff;
     }
   </style>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
-  <div id="login">
-    <div id="g_id_onload"
-      data-client_id="980822676255-vntch0t28qbesul2bp5oc1galtoi8a97.apps.googleusercontent.com"
-      data-callback="handleCredentialResponse"
-      data-context="use"
-      data-ux_mode="popup"
-      data-auto_select="true"
-      data-itp_support="true">
-    </div>
-    <div class="g_id_signin"
-      data-type="standard"
-      data-shape="rectangular"
-      data-theme="outline"
-      data-text="signin_with"
-      data-size="large"
-      data-logo_alignment="left">
-    </div>
+
+<div id="login-info">
+  <div id="g_id_onload"
+    data-client_id="980822676255-vntch0t28qbesul2bp5oc1galtoi8a97.apps.googleusercontent.com"
+    data-callback="handleCredentialResponse"
+    data-auto_prompt="false">
+  </div>
+  <div class="g_id_signin"
+    data-type="standard"
+    data-size="large"
+    data-theme="outline"
+    data-text="sign_in_with"
+    data-shape="rectangular"
+    data-logo_alignment="left">
   </div>
 
-  <div id="formulario" style="display: none;">
-    <label>¿Dónde te pueden contactar? (URL)</label>
-    <input type="text" id="contactoURL" placeholder="https://wa.me/..." />
-    <label>¿Qué estás ofreciendo? (máx 3 renglones)</label>
-    <textarea id="descripcion" placeholder="Clases, asesorías, networking, etc."></textarea>
-    <button onclick="actualizarNodo()">Actualizar estado</button>
-  </div>
+  <h3 id="user-name">No autenticado</h3>
 
-  <div id="cy"></div>
+  <input type="text" id="urlInput" placeholder="Tu enlace de contacto (Telegram, WhatsApp...)" />
+  <textarea id="descInput" rows="3" placeholder="Tu descripción o estado (máx 3 renglones)..."></textarea>
+  <button onclick="actualizarEstado()">Actualizar estado</button>
+</div>
 
-  <script>
-    let usuario = null;
-    let nodoUsuario = null;
+<div id="cy"></div>
 
-    const cy = cytoscape({
-      container: document.getElementById('cy'),
-      style: [
-        {
-          selector: 'node',
-          style: {
-            'background-color': '#0074D9',
-            'label': 'data(label)',
-            'color': '#fff',
-            'text-valign': 'center',
-            'text-wrap': 'wrap',
-            'text-max-width': '150px',
-            'font-size': 12,
-            'shape': 'roundrectangle',
-            'padding': 10,
-            'width': 'label',
-            'height': 'label',
-            'border-width': 2,
-            'border-color': '#005fa3'
-          }
+<script>
+  const socket = io("https://TU_BACKEND_URL"); // ⚠️ cambia por la URL real
+
+  let usuario = null;
+  let urlContacto = "";
+  let descripcion = "";
+
+  const cy = cytoscape({
+    container: document.getElementById("cy"),
+    elements: [],
+    style: [
+      {
+        selector: 'node',
+        style: {
+          'shape': 'roundrectangle',
+          'width': 'label',
+          'padding': '12px',
+          'label': 'data(label)',
+          'background-color': '#f9f9f9',
+          'border-width': 2,
+          'border-color': '#333',
+          'font-size': '14px',
+          'text-wrap': 'wrap',
+          'text-max-width': 160,
         }
-      ],
-      layout: {
-        name: 'grid',
-        rows: 1
       }
-    });
+    ],
+    layout: { name: 'grid' }
+  });
 
-    function handleCredentialResponse(response) {
-      const payload = decodeJwtResponse(response.credential);
-      usuario = {
-        name: payload.name,
-        email: payload.email,
-        picture: payload.picture
-      };
-      document.getElementById("login").style.display = "none";
-      document.getElementById("formulario").style.display = "block";
-      crearNodoInicial();
-    }
+  function actualizarEstado() {
+    urlContacto = document.getElementById("urlInput").value;
+    descripcion = document.getElementById("descInput").value;
 
-    function decodeJwtResponse(token) {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(atob(base64).split('').map(c =>
-        '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-      ).join(''));
-      return JSON.parse(jsonPayload);
-    }
-
-    function crearNodoInicial() {
-      const contenido = `${usuario.name}\n(Sin información aún)`;
-      nodoUsuario = cy.add({
-        group: 'nodes',
-        data: {
-          id: usuario.email,
-          label: contenido,
-          href: ""
-        },
-        position: {
-          x: Math.random() * 600 + 100,
-          y: Math.random() * 400 + 100
-        }
+    if (usuario) {
+      socket.emit("nuevo-usuario", {
+        name: usuario.name,
+        email: usuario.email,
+        contactUrl: urlContacto,
+        description: descripcion
       });
     }
+  }
 
-    function actualizarNodo() {
-      const url = document.getElementById("contactoURL").value.trim();
-      const desc = document.getElementById("descripcion").value.trim();
+  function decodeJwtResponse(token) {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(c =>
+      '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+    ).join(''));
+    return JSON.parse(jsonPayload);
+  }
 
-      if (!nodoUsuario) return;
+  function handleCredentialResponse(response) {
+    usuario = decodeJwtResponse(response.credential);
+    document.getElementById("user-name").textContent = usuario.name;
 
-      const nuevoContenido = `${usuario.name}\n${desc}\n(${url})`;
+    actualizarEstado(); // envia el nodo inicial
+  }
 
-      nodoUsuario.data('label', nuevoContenido);
-      nodoUsuario.data('href', url);
-    }
+  socket.on("usuarios-actualizados", (usuarios) => {
+    cy.elements().remove();
 
-    // Permite hacer clic en el nodo para abrir el enlace
-    cy.on('tap', 'node', function(evt){
-      const url = evt.target.data('href');
-      if(url) window.open(url, '_blank');
+    usuarios.forEach((u) => {
+      const texto = `${u.name}\n${u.description || ""}`;
+      const node = cy.add({
+        group: 'nodes',
+        data: {
+          id: u.email,
+          label: texto,
+          href: u.contactUrl || ""
+        },
+        position: {
+          x: Math.random() * 600 + 50,
+          y: Math.random() * 400 + 50
+        }
+      });
+
+      node.on("tap", () => {
+        if (u.contactUrl) {
+          window.open(u.contactUrl, "_blank");
+        }
+      });
     });
-  </script>
+
+    cy.layout({ name: 'grid' }).run();
+  });
+</script>
+
 </body>
 </html>
+
 
 
