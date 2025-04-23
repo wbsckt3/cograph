@@ -46,7 +46,7 @@
 </head>
 <body>
   <!-- Login -->
-  <div id="login">
+ <!-- <div id="login">
     <div id="g_id_onload"
       data-client_id="965589316488-ek19vk2uqjpaf2gilkpg5k8e33jbsd5k.apps.googleusercontent.com"
       data-callback="handleCredentialResponse"
@@ -65,7 +65,7 @@
       data-logo_alignment="left"
       data-log_level="silent">
     </div>
-  </div>
+  </div> -->
 
   <!-- Formulario -->
   <div id="formulario" style="display: none;">
@@ -87,6 +87,26 @@
       if (args[0]?.includes('play.google.com/log')) return; // Filtra el error específico
       originalError.apply(console, args);
     };
+
+
+
+  window.onload = () => {
+    google.accounts.id.initialize({
+      client_id: "965589316488-ek19vk2uqjpaf2gilkpg5k8e33jbsd5k.apps.googleusercontent.com",
+      callback: handleCredentialResponse,
+      login_uri: window.location.origin,
+      ux_mode: "popup",
+      log_level: "silent" // <- Obligatorio para desactivar logs
+    });
+    
+    google.accounts.id.renderButton(
+      document.getElementById("login"),
+      { theme: "outline", size: "large", text: "signin_with" }
+    );
+    
+    google.accounts.id.prompt();
+  };
+
     
     // Firebase config
     const firebaseConfig = {
