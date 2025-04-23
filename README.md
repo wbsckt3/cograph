@@ -5,7 +5,7 @@
 
 Snapshot status:
 
-index.html -->  Solicitud de origen cruzado bloqueada: La política de mismo origen no permite la lectura de recursos remotos en https://play.google.com/log?format=json&hasfast=true&authuser=0. (Razón: Solicitud CORS sin éxito). Código de estado: (null).
+index.html --> OK con el oauth2 de refactorii registrado como externo en firebase console authentication
 
 index.html_OK_antes_de_firebase  ---> crea nodos Ok antes de cambiar el método de autenticación a firebase
 
