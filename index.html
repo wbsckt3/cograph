@@ -74,32 +74,81 @@
   <div class="loading" style="display: none;">Cargando red...</div>
 
   <script>
-    
-    let cy = null; // Inicializar como null
+    let cy = null;
     let currentUser = null;
     let nodos = JSON.parse(localStorage.getItem('nodos')) || {};
     let conexiones = JSON.parse(localStorage.getItem('conexiones')) || {};
 
-    // Función de inicialización modificada
+    function cargarDatosEnRed() {
+      // Cargar nodos
+      Object.entries(nodos).forEach(([id, datos]) => {
+        cy.add({
+          group: 'nodes',
+          data: {
+            id: id,
+            label: `${datos.nombre}\n${datos.descripcion}`,
+            href: datos.url
+          },
+          position: datos.position || { 
+            x: Math.random() * 500, 
+            y: Math.random() * 500 
+          }
+        });
+      });
+
+      // Cargar conexiones
+      Object.values(conexiones).forEach(conexion => {
+        cy.add({
+          group: 'edges',
+          data: {
+            id: conexion.id,
+            source: conexion.source,
+            target: conexion.target
+          }
+        });
+      });
+    }
+
     function inicializarCytoscape() {
-      // Verificar si el contenedor existe
       if (!document.getElementById('cy')) return;
       
       cy = cytoscape({
         container: document.getElementById('cy'),
-        // ... (configuración de estilos anterior) ...
+        style: [{
+          selector: 'node',
+          style: {
+            'background-color': '#0074D9',
+            'label': 'data(label)',
+            'color': '#fff',
+            'text-valign': 'center',
+            'text-wrap': 'wrap',
+            'text-max-width': '150px',
+            'font-size': 12,
+            'shape': 'roundrectangle',
+            'padding': 10,
+            'width': 'label',
+            'height': 'label',
+            'border-width': 2,
+            'border-color': '#005fa3'
+          }
+        }, {
+          selector: 'node[href]',
+          style: {
+            'border-color': '#00ff00',
+            'border-width': 3
+          }
+        }, {
+          selector: 'edge',
+          style: {
+            'width': 2,
+            'line-color': '#999',
+            'curve-style': 'bezier'
+          }
+        }]
       });
 
-      // Cargar datos solo si cy existe
-      if (cy) {
-        cargarDatosEnRed();
-        configurarEventos();
-        cy.layout({ name: 'cose', animate: true }).run();
-      }
-    }
+      cargarDatosEnRed();
 
-    // Nueva función para configurar eventos
-    function configurarEventos() {
       cy.on('tap', 'node', function(evt) {
         const node = evt.target;
         const href = node.data('href');
@@ -112,25 +161,10 @@
           crearConexion(targetNode.id());
         }
       });
+
+      cy.layout({ name: 'cose', animate: true }).run();
     }
 
-    // Modificar el event listener de carga
-    window.addEventListener('load', () => {
-      if (Object.keys(nodos).length > 0) {
-        inicializarCytoscape(); // Inicializar aquí
-      }
-      
-      // Verificar estado de autenticación
-      const savedUser = localStorage.getItem('currentUser');
-      if (savedUser) {
-        currentUser = JSON.parse(savedUser);
-        document.getElementById("login").style.display = "none";
-        document.getElementById("formulario").style.display = "block";
-        inicializarCytoscape();
-      }
-    });
-
-    // Modificar handler de Google Sign-In
     function handleCredentialResponse(response) {
       try {
         document.querySelector('.loading').style.display = 'block';
@@ -145,12 +179,8 @@
         document.getElementById("login").style.display = "none";
         document.getElementById("formulario").style.display = "block";
 
-        // Inicializar Cytoscape si no existe
-        if (!cy) {
-          inicializarCytoscape();
-        }
+        if (!cy) inicializarCytoscape();
 
-        // Añadir usuario si no existe
         if (!nodos[currentUser.uid]) {
           actualizarNodo(true);
         }
@@ -162,9 +192,8 @@
       }
     }
 
-    // Modificar función de actualización de nodo
     function actualizarNodo(inicial = false) {
-      if (!cy) return; // Validar existencia de cy
+      if (!cy) return;
 
       const url = document.getElementById("contactoURL").value.trim();
       const desc = document.getElementById("descripcion").value.trim();
@@ -204,15 +233,45 @@
       }
     }
 
-    // Modificar limpieza al salir
+    function crearConexion(targetUID) {
+      if (currentUser?.uid && targetUID !== currentUser.uid) {
+        const conexionId = `${currentUser.uid}_${targetUID}`;
+        
+        conexiones[conexionId] = {
+          id: conexionId,
+          source: currentUser.uid,
+          target: targetUID
+        };
+        localStorage.setItem('conexiones', JSON.stringify(conexiones));
+
+        cy.add({
+          group: 'edges',
+          data: conexiones[conexionId]
+        });
+        
+        cy.layout({ name: 'cose', animate: true }).run();
+      }
+    }
+
+    window.addEventListener('load', () => {
+      if (Object.keys(nodos).length > 0) inicializarCytoscape();
+      
+      const savedUser = localStorage.getItem('currentUser');
+      if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        document.getElementById("login").style.display = "none";
+        document.getElementById("formulario").style.display = "block";
+        inicializarCytoscape();
+      }
+    });
+
     window.addEventListener('beforeunload', () => {
-      if (currentUser?.uid && cy) { // Validar existencia de cy
+      if (currentUser?.uid && cy) {
         delete nodos[currentUser.uid];
         localStorage.setItem('nodos', JSON.stringify(nodos));
         cy.$(`#${currentUser.uid}`).remove();
       }
     });
-  
   </script>
 </body>
 </html>
